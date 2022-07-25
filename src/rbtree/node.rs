@@ -19,7 +19,7 @@ pub struct Node<K, V> {
     color: Color,
 }
 
-#[derive(PartialEq, Eq, Debug, Copy)]
+#[derive(Debug, Copy)]
 pub struct NodePtr<K, V> (*mut Node<K, V>);
 
 impl<K, V> Clone for NodePtr<K, V> {
@@ -166,6 +166,18 @@ impl<K, V> NodePtr<K, V> {
         }
     }
 
+    pub fn has_left(&self) -> bool {
+        !self.left().is_null()
+    }
+
+    pub fn has_right(&self) -> bool {
+        !self.right().is_null()
+    }
+
+    pub fn has_parent(&self) -> bool {
+        !self.parent().is_null()
+    }
+
     pub fn predecessor(&self) -> Self {
         // if there is a right subtree
         if !self.left().is_null() {
@@ -185,6 +197,121 @@ impl<K, V> NodePtr<K, V> {
         }
     }
 
+    pub fn set_value(&mut self, v: V) {
+        unsafe {(*self.0).value = v };
+    }
+
+    /// Check if two node pointers are pointing to the same node.
+    pub fn is_node_same(&self, other: &Self) -> bool {
+        ptr::eq(self.0, other.0)
+    }
+
+    // Rotations
+
+    /// Left rotate assumes the existence of a right child.
+    /// This function rotates the node and turns the right child
+    /// into its parent node.
+    pub fn left_rotate(&mut self) {
+        /*
+         *   self          b
+         *   / \          / \
+         *  1   b    => self 3 
+         *     / \      / \
+         *    2   3    1   2
+         */
+
+        let mut b = self.right();
+        let mut node_2 = b.left();
+
+        let mut parent = self.parent();
+
+        // set b to be the parent of self.
+        self.set_parent(&b);
+        b.set_left(&self);
+
+        // set node_2 to self.
+        self.set_right(&node_2);
+        if !node_2.is_null() {
+            node_2.set_parent(&self);
+        }
+        
+
+        // and set self's parent to b
+        b.set_parent(&parent);
+
+        if !parent.is_null() {
+            if parent.left().is_node_same(&self) {
+                parent.set_left(&b);
+            } else {
+                parent.set_right(&b);
+            }
+        }
+
+        
+    }
+
+    /// Right rotate assumes the existence of a left child.
+    /// This function rotates the node and turns the left child
+    /// into its parent node.
+    pub fn right_rotate(&mut self) {
+        /*
+         *   self          b
+         *   / \          / \
+         *  1   b    => self 3 
+         *     / \      / \
+         *    2   3    1   2
+         */
+
+        let mut b = self.left();
+        let mut node_2 = b.right();
+
+        let mut parent = self.parent();
+
+        // set b to be the parent of self.
+        self.set_parent(&b);
+        b.set_right(&self);
+
+        // set node_2 to self.
+        self.set_left(&node_2);
+        if !node_2.is_null() {
+            node_2.set_parent(&self);
+        }
+        
+
+        // and set self's parent to b
+        b.set_parent(&parent);
+
+        if !parent.is_null() {
+            if parent.left().is_node_same(&self) {
+                parent.set_left(&b);
+            } else {
+                parent.set_right(&b);
+            }
+        }
+
+        
+    }
+
+}
+
+impl<K: PartialEq, V> PartialEq for NodePtr<K, V> {
+    fn eq(&self, other: &Self) -> bool {
+        self.key() == other.key()
+    }
+}
+
+impl<K: Eq, V> Eq for NodePtr<K, V> {}
+
+impl<K: PartialOrd, V> PartialOrd for NodePtr<K, V> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.key().partial_cmp(&other.key())
+    } 
+}
+
+impl<K: Ord, V> Ord for NodePtr<K, V> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.key().cmp(&other.key())
+    }
 }
 
 impl<K, V> Node<K, V> {
@@ -398,5 +525,32 @@ mod tests {
         let succ = n0.successor();
 
         assert!(succ.is_null());
+    }
+
+    #[test]
+    fn left_rotate_test() {
+        let mut p = NodePtr::new(4, 3);
+        let mut a = NodePtr::new(5, 1);
+        let mut b = NodePtr::new(1, 5);
+        let mut c = NodePtr::new(100, -4);
+
+        p.set_left(&a);
+        a.set_parent(&p);
+
+        a.set_right(&b);
+        b.set_parent(&a);
+
+        c.set_parent(&b);
+        b.set_left(&c);
+
+        assert_eq!(p.left().key(), a.key());
+        assert_ne!(a.right().key(), c.key());
+
+        a.left_rotate();
+
+        assert_eq!(p.left().key(), b.key());
+        assert_eq!(a.right().key(), c.key());
+        assert!(a.left().is_null());
+        assert!(a.parent().is_node_same(&b));
     }
 }
