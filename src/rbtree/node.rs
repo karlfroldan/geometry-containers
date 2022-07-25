@@ -4,7 +4,7 @@ use std::{ptr, boxed};
 use std::boxed::Box;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
-enum Color {Black, Red}
+pub enum Color {Black, Red}
 
 #[derive(PartialEq, Eq, Clone)]
 pub struct Node<K, V> {
@@ -59,12 +59,16 @@ impl<K, V> NodePtr<K, V> {
         unsafe { self.0.read() }.value
     }
 
-    fn color(&self) -> Color {
+    pub fn color(&self) -> Color {
         if self.0.is_null() {
             Color::Black
         } else {
             unsafe { self.0.read() }.color
         }
+    }
+
+    pub fn drop_in_place(&self) {
+        unsafe { self.0.drop_in_place() };
     }
 
     pub fn is_null(&self) -> bool {
@@ -96,6 +100,10 @@ impl<K, V> NodePtr<K, V> {
         } else {
             unsafe { (*self.0).right.clone() }
         }
+    }
+
+    pub fn set_color(&mut self, color: Color) {
+        unsafe { (*self.0).color = color };
     }
 
     /// Set the right child of the current node pointer.
@@ -147,6 +155,22 @@ impl<K, V> NodePtr<K, V> {
         right.clone()
     }
 
+    /// Swap the keys and values of two nodes.
+    pub fn swap(&mut self, other: &mut Self) {
+        let k1 = self.key();
+        let v1 = self.value();
+
+        let k2 = other.key();
+        let v2 = other.value();
+
+
+        unsafe {(*self.0).key = k2};
+        unsafe {(*self.0).value = v2};
+
+        unsafe {(*other.0).key = k1};
+        unsafe {(*other.0).value = v1};
+    }
+
     pub fn successor(&self) -> Self {
         // if there is a right subtree
         if !self.right().is_null() {
@@ -195,6 +219,18 @@ impl<K, V> NodePtr<K, V> {
 
             parent
         }
+    }
+
+    pub fn set_parent_null(&mut self) {
+        unsafe { (*self.0).parent = NodePtr::null() };
+    }
+
+    pub fn set_left_null(&mut self) {
+        unsafe { (*self.0).left = NodePtr::null() };
+    }
+
+    pub fn set_right_null(&mut self) {
+        unsafe { (*self.0).right = NodePtr::null() };
     }
 
     pub fn set_value(&mut self, v: V) {
