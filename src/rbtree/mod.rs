@@ -2,8 +2,6 @@ mod node;
 
 use node::*;
 
-
-
 pub struct RBTree<K, V> {
     root: NodePtr<K, V>,
     size: usize,
@@ -11,24 +9,28 @@ pub struct RBTree<K, V> {
 
 impl<K, V> RBTree<K, V> {
     pub fn new() -> Self {
-        Self { root: NodePtr::null(), size: 0 }
+        Self {
+            root: NodePtr::null(),
+            size: 0,
+        }
     }
 
     pub fn is_empty(&self) -> bool {
         self.size == 0
     }
 
-    pub fn find_with<U, D, F>(&self, f: F, x: &D, k: K) -> Option<TreeElement<K, V>> 
-        where U: PartialOrd, F: Fn(&K, &D) -> U
+    pub fn find_with<U, D, F>(&self, f: F, x: &D, k: K) -> Option<TreeElement<K, V>>
+    where
+        U: PartialOrd,
+        F: Fn(&K, &D) -> U,
     {
         if self.is_empty() {
             return None;
-        } 
+        }
 
         let mut parent = self.root.clone();
 
         while !parent.is_null() {
-
             let p_k = parent.key();
 
             if f(&p_k, x) == f(&k, x) {
@@ -45,11 +47,13 @@ impl<K, V> RBTree<K, V> {
     }
 
     /// The function `insert_with` inserts into a binary search tree with a priority
-    /// function `f: (K, D) -> U` where `K` is the type of the key, `D` is another type 
+    /// function `f: (K, D) -> U` where `K` is the type of the key, `D` is another type
     /// which makes `f` the dynamic insertion function, and `U` is their output. In this way,
     /// `U`'s behavior on `K` depends on whatever value is passed to `D`.
-    pub fn insert_with<U, D, F>(&mut self, f: F, x: &D, k: K, v: V) 
-        where U: PartialOrd, F: Fn(&K, &D) -> U
+    pub fn insert_with<U, D, F>(&mut self, f: F, x: &D, k: K, v: V)
+    where
+        U: PartialOrd,
+        F: Fn(&K, &D) -> U,
     {
         let n = NodePtr::new(k, v);
 
@@ -61,8 +65,10 @@ impl<K, V> RBTree<K, V> {
         }
     }
 
-    fn insert_with_aux<U, D, F>(&mut self, f: F, x: &D,  mut n: NodePtr<K, V>) 
-        where U: PartialOrd, F: Fn(&K, &D) -> U
+    fn insert_with_aux<U, D, F>(&mut self, f: F, x: &D, mut n: NodePtr<K, V>)
+    where
+        U: PartialOrd,
+        F: Fn(&K, &D) -> U,
     {
         // we can assume that there is a root.
         let mut y = self.root.clone();
@@ -81,21 +87,15 @@ impl<K, V> RBTree<K, V> {
                 y.set_value(n.value());
                 self.size += 1;
                 return; // do nothing else.
-                
             } else if f(&n_k, x) > f(&y_k, x) {
-
                 // insert n to y's right.
                 child = y.right();
                 y = child;
-                
             } else {
-
                 // insert n to y's left.
                 child = y.left();
                 y = child;
-
             }
-
         }
 
         let p_k = parent.key();
@@ -108,13 +108,11 @@ impl<K, V> RBTree<K, V> {
 
         n.set_parent(&parent);
         self.size += 1;
-
     }
 }
 
 impl<K: Ord, V> RBTree<K, V> {
     fn insert_aux(&mut self, mut n: NodePtr<K, V>) {
-
         // we can assume that there is a root.
         let mut y = self.root.clone();
         let mut parent: NodePtr<K, V> = NodePtr::null();
@@ -129,19 +127,14 @@ impl<K: Ord, V> RBTree<K, V> {
                 self.size += 1;
                 return; // do nothing else.
             } else if n > y {
-
                 // insert n to y's right.
                 child = y.right();
                 y = child;
-                
             } else {
-
                 // insert n to y's left.
                 child = y.left();
                 y = child;
-
             }
-
         }
 
         if n > parent {
@@ -152,9 +145,8 @@ impl<K: Ord, V> RBTree<K, V> {
 
         n.set_parent(&parent);
         self.size += 1;
-
     }
-    
+
     /// Insert a new element into the tree.
     pub fn insert(&mut self, k: K, v: V) {
         let n = NodePtr::new(k, v);
@@ -174,12 +166,11 @@ impl<K: Ord, V> RBTree<K, V> {
     pub fn find(&self, k: K) -> Option<TreeElement<K, V>> {
         if self.is_empty() {
             return None;
-        } 
+        }
 
         let mut parent = self.root.clone();
 
         while !parent.is_null() {
-
             if parent.key() == k {
                 let elem = TreeElement::new(&parent);
                 return Some(elem);
@@ -194,7 +185,6 @@ impl<K: Ord, V> RBTree<K, V> {
     }
 
     pub fn remove(&mut self, n: TreeElement<K, V>) {
-
         let mut ptr = n.nodeptr;
 
         // we have three cases:
@@ -206,7 +196,6 @@ impl<K: Ord, V> RBTree<K, V> {
 
         // CASE 1. Ptr is leaf.
         if !ptr.has_left() && !ptr.has_right() {
-
             if !parent.is_null() {
                 if parent.left().is_node_same(&ptr) {
                     parent.set_left_null();
@@ -220,7 +209,6 @@ impl<K: Ord, V> RBTree<K, V> {
             ptr.drop_in_place();
         // Has two children.
         } else if ptr.has_left() && ptr.has_right() {
-            
             let mut succ = ptr.successor();
 
             // swap the key and value of succ and ptr.
@@ -281,12 +269,9 @@ pub struct TreeElement<K, V> {
     nodeptr: NodePtr<K, V>,
 }
 
-
 impl<K, V> TreeElement<K, V> {
     fn new(n: &NodePtr<K, V>) -> Self {
-        Self {
-            nodeptr: n.clone()
-        }
+        Self { nodeptr: n.clone() }
     }
 
     pub fn key(&self) -> K {
@@ -326,21 +311,18 @@ impl<K, V> TreeElement<K, V> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn inserting_to_empty_tree() {
-
         let mut tree = RBTree::new();
 
         tree.insert(4, 1);
 
         assert_eq!(tree.size, 1);
         assert_eq!(tree.root.key(), 4);
-
     }
 
     #[test]
@@ -424,7 +406,6 @@ mod tests {
         let n = tree.find(15).unwrap();
         tree.remove(n);
 
-
         assert_eq!(tree.root.key(), 14);
         assert_eq!(tree.size, 1);
         assert!(!tree.root.has_right());
@@ -450,9 +431,8 @@ mod tests {
         let n_13_ptr = n_13.nodeptr.clone();
 
         assert_eq!(n_13_ptr.left().key(), 3);
-        
+
         tree.remove(n_13);
-        
 
         assert_eq!(r.right().key(), 3);
         assert_eq!(tree.size, 2);
@@ -485,7 +465,6 @@ mod tests {
         assert_eq!(tree.root.right().value(), 4);
     }
 
-    
     type Point = (f64, f64);
     type Segment = (Point, Point);
 
@@ -518,9 +497,9 @@ mod tests {
     #[test]
     fn insert_dynamic_empty_tree() {
         let mut tree1 = RBTree::new();
-        
-        let s0 : Segment = ((0.0, 0.0), (1.0, 2.0));
-        let s1 : Segment = ((0.0, 1.0), (2.0, -1.0));
+
+        let s0: Segment = ((0.0, 0.0), (1.0, 2.0));
+        let s1: Segment = ((0.0, 1.0), (2.0, -1.0));
 
         tree1.insert_with(x_int, &0.9, s0.clone(), 4);
         tree1.insert_with(x_int, &0.9, s1.clone(), 3);
@@ -530,13 +509,12 @@ mod tests {
         assert_eq!(tree1.root.left().value(), 3);
 
         let mut tree2 = RBTree::new();
-     
+
         tree2.insert_with(x_int, &0.1, s0.clone(), 4);
         tree2.insert_with(x_int, &0.1, s1.clone(), 3);
 
         // Right now, s1 should be on s0's right.
         assert_eq!(tree2.root.value(), 4);
         assert_eq!(tree2.root.right().value(), 3);
-
     }
 }

@@ -1,26 +1,29 @@
 use std::borrow::Borrow;
+use std::boxed::Box;
 use std::fmt::Debug;
 use std::ptr;
-use std::boxed::Box;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
-pub enum Color {Black, Red}
+pub enum Color {
+    Black,
+    Red,
+}
 
 #[derive(PartialEq, Eq, Clone)]
 pub struct Node<K, V> {
-    pub key:   K,
+    pub key: K,
     pub value: V,
 
     // Pointers to other nodes.
     parent: NodePtr<K, V>,
-    left:   NodePtr<K, V>,
-    right:  NodePtr<K, V>,
+    left: NodePtr<K, V>,
+    right: NodePtr<K, V>,
 
     color: Color,
 }
 
 #[derive(Debug, Copy)]
-pub struct NodePtr<K, V> (*mut Node<K, V>);
+pub struct NodePtr<K, V>(*mut Node<K, V>);
 
 impl<K, V> Clone for NodePtr<K, V> {
     fn clone(&self) -> Self {
@@ -29,7 +32,6 @@ impl<K, V> Clone for NodePtr<K, V> {
 }
 
 impl<K, V> NodePtr<K, V> {
-
     /// Create a new node allocated on the heap from the key and the value.
     pub fn new(key: K, value: V) -> Self {
         let n = Node::new(key, value);
@@ -45,7 +47,7 @@ impl<K, V> NodePtr<K, V> {
     pub fn from_node(n: Node<K, V>) -> Self {
         // First, create a boxed version of the node.
         let boxed_node = Box::new(n);
-        
+
         NodePtr(Box::into_raw(boxed_node))
     }
 
@@ -103,12 +105,10 @@ impl<K, V> NodePtr<K, V> {
     }
 
     pub fn set_color(&mut self, color: Color) {
-
         // We can only change the color of non-leaf nodes.
         if !self.is_null() {
             unsafe { (*self.0).color = color };
         }
-        
     }
 
     /// Set the right child of the current node pointer.
@@ -168,12 +168,11 @@ impl<K, V> NodePtr<K, V> {
         let k2 = other.key();
         let v2 = other.value();
 
+        unsafe { (*self.0).key = k2 };
+        unsafe { (*self.0).value = v2 };
 
-        unsafe {(*self.0).key = k2};
-        unsafe {(*self.0).value = v2};
-
-        unsafe {(*other.0).key = k1};
-        unsafe {(*other.0).value = v1};
+        unsafe { (*other.0).key = k1 };
+        unsafe { (*other.0).value = v1 };
     }
 
     pub fn successor(&self) -> Self {
@@ -185,7 +184,7 @@ impl<K, V> NodePtr<K, V> {
             let mut x = self;
             let mut x_parent;
 
-            while parent.right().0 == x.0 && !parent.is_null()  {
+            while parent.right().0 == x.0 && !parent.is_null() {
                 parent = parent.parent().clone();
                 x_parent = x.parent();
                 x = x_parent.borrow();
@@ -216,7 +215,7 @@ impl<K, V> NodePtr<K, V> {
             let mut x = self;
             let mut x_parent;
 
-            while parent.left().0 == x.0 && !parent.is_null()  {
+            while parent.left().0 == x.0 && !parent.is_null() {
                 parent = parent.parent().clone();
                 x_parent = x.parent();
                 x = x_parent.borrow();
@@ -239,7 +238,7 @@ impl<K, V> NodePtr<K, V> {
     }
 
     pub fn set_value(&mut self, v: V) {
-        unsafe {(*self.0).value = v };
+        unsafe { (*self.0).value = v };
     }
 
     /// Check if two node pointers are pointing to the same node.
@@ -256,7 +255,7 @@ impl<K, V> NodePtr<K, V> {
         /*
          *   self          b
          *   / \          / \
-         *  1   b    => self 3 
+         *  1   b    => self 3
          *     / \      / \
          *    2   3    1   2
          */
@@ -275,7 +274,6 @@ impl<K, V> NodePtr<K, V> {
         if !node_2.is_null() {
             node_2.set_parent(&self);
         }
-        
 
         // and set self's parent to b
         b.set_parent(&parent);
@@ -287,8 +285,6 @@ impl<K, V> NodePtr<K, V> {
                 parent.set_right(&b);
             }
         }
-
-        
     }
 
     /// Right rotate assumes the existence of a left child.
@@ -298,7 +294,7 @@ impl<K, V> NodePtr<K, V> {
         /*
          *   self          b
          *   / \          / \
-         *  1   b    => self 3 
+         *  1   b    => self 3
          *     / \      / \
          *    2   3    1   2
          */
@@ -317,7 +313,6 @@ impl<K, V> NodePtr<K, V> {
         if !node_2.is_null() {
             node_2.set_parent(&self);
         }
-        
 
         // and set self's parent to b
         b.set_parent(&parent);
@@ -329,10 +324,7 @@ impl<K, V> NodePtr<K, V> {
                 parent.set_right(&b);
             }
         }
-
-        
     }
-
 }
 
 impl<K: PartialEq, V> PartialEq for NodePtr<K, V> {
@@ -346,7 +338,7 @@ impl<K: Eq, V> Eq for NodePtr<K, V> {}
 impl<K: PartialOrd, V> PartialOrd for NodePtr<K, V> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.key().partial_cmp(&other.key())
-    } 
+    }
 }
 
 impl<K: Ord, V> Ord for NodePtr<K, V> {
@@ -356,16 +348,16 @@ impl<K: Ord, V> Ord for NodePtr<K, V> {
 }
 
 impl<K, V> Node<K, V> {
-
     pub fn new(k: K, v: V) -> Self {
-        Self { key: k, value: v, 
-            parent: NodePtr::null(), 
-            left: NodePtr::null(), 
-            right: NodePtr::null(), 
+        Self {
+            key: k,
+            value: v,
+            parent: NodePtr::null(),
+            left: NodePtr::null(),
+            right: NodePtr::null(),
             color: Color::Red,
         }
     }
-
 }
 
 #[cfg(test)]
