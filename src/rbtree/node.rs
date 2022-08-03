@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 use std::fmt::Debug;
-use std::{ptr, boxed};
+use std::ptr;
 use std::boxed::Box;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -103,7 +103,12 @@ impl<K, V> NodePtr<K, V> {
     }
 
     pub fn set_color(&mut self, color: Color) {
-        unsafe { (*self.0).color = color };
+
+        // We can only change the color of non-leaf nodes.
+        if !self.is_null() {
+            unsafe { (*self.0).color = color };
+        }
+        
     }
 
     /// Set the right child of the current node pointer.

@@ -19,7 +19,7 @@ impl<K, V> RBTree<K, V> {
     }
 
     pub fn find_with<U, D, F>(&self, f: F, x: &D, k: K) -> Option<TreeElement<K, V>> 
-        where U: Ord, F: Fn(&K, &D) -> U
+        where U: PartialOrd, F: Fn(&K, &D) -> U
     {
         if self.is_empty() {
             return None;
@@ -49,7 +49,7 @@ impl<K, V> RBTree<K, V> {
     /// which makes `f` the dynamic insertion function, and `U` is their output. In this way,
     /// `U`'s behavior on `K` depends on whatever value is passed to `D`.
     pub fn insert_with<U, D, F>(&mut self, f: F, x: &D, k: K, v: V) 
-        where U: Ord, F: Fn(&K, &D) -> U
+        where U: PartialOrd, F: Fn(&K, &D) -> U
     {
         let n = NodePtr::new(k, v);
 
@@ -61,8 +61,8 @@ impl<K, V> RBTree<K, V> {
         }
     }
 
-    pub fn insert_with_aux<U, D, F>(&mut self, f: F, x: &D,  mut n: NodePtr<K, V>) 
-        where U: Ord, F: Fn(&K, &D) -> U
+    fn insert_with_aux<U, D, F>(&mut self, f: F, x: &D,  mut n: NodePtr<K, V>) 
+        where U: PartialOrd, F: Fn(&K, &D) -> U
     {
         // we can assume that there is a root.
         let mut y = self.root.clone();
@@ -283,7 +283,7 @@ pub struct TreeElement<K, V> {
 
 
 impl<K, V> TreeElement<K, V> {
-    fn new(n: &NodePtr<K, V>) -> TreeElement<K, V>{
+    fn new(n: &NodePtr<K, V>) -> Self {
         Self {
             nodeptr: n.clone()
         }
@@ -297,7 +297,7 @@ impl<K, V> TreeElement<K, V> {
         self.nodeptr.value()
     }
 
-    pub fn successor(&self) -> Option<TreeElement<K, V>> {
+    pub fn successor(&self) -> Option<Self> {
         let succ = self.nodeptr.successor();
 
         if succ.is_null() {
@@ -307,7 +307,7 @@ impl<K, V> TreeElement<K, V> {
         }
     }
 
-    pub fn predecessor(&self) -> Option<TreeElement<K, V>> {
+    pub fn predecessor(&self) -> Option<Self> {
         let succ = self.nodeptr.predecessor();
 
         if succ.is_null() {
@@ -315,6 +315,14 @@ impl<K, V> TreeElement<K, V> {
         } else {
             Some(TreeElement::new(&succ))
         }
+    }
+
+    /// Swaps the elements of the red-black tree.
+    pub fn swap(&mut self, other: &mut Self) {
+        let mut p0 = self.nodeptr.clone();
+        let mut p1 = other.nodeptr.clone();
+
+        p0.swap(&mut p1);
     }
 }
 
@@ -459,6 +467,24 @@ mod tests {
         tree.insert(1, 4);
     }
 
+    #[test]
+    fn swap_tree_elements() {
+        let mut tree = RBTree::new();
+
+        tree.insert(0, 4);
+        tree.insert(1, 0);
+
+        let mut root = tree.find(0).unwrap();
+        let mut succ = root.successor().unwrap();
+
+        root.swap(&mut succ);
+
+        assert_eq!(tree.root.key(), 1);
+        assert_eq!(tree.root.value(), 0);
+        assert_eq!(tree.root.right().key(), 0);
+        assert_eq!(tree.root.right().value(), 4);
+    }
+
     
     type Point = (f64, f64);
     type Segment = (Point, Point);
@@ -480,7 +506,7 @@ mod tests {
         y - (m * x)
     }
 
-    fn x_int(s: &Segment, y: f64) -> f64 {
+    fn x_int(s: &Segment, y: &f64) -> f64 {
         let m = slope(s);
         let b = bias(s);
 
@@ -491,8 +517,26 @@ mod tests {
     // Some tests for a dynamic red black tree.
     #[test]
     fn insert_dynamic_empty_tree() {
-        let mut tree: RBTree<Segment, i32> = RBTree::new();
+        let mut tree1 = RBTree::new();
         
-        
+        let s0 : Segment = ((0.0, 0.0), (1.0, 2.0));
+        let s1 : Segment = ((0.0, 1.0), (2.0, -1.0));
+
+        tree1.insert_with(x_int, &0.9, s0.clone(), 4);
+        tree1.insert_with(x_int, &0.9, s1.clone(), 3);
+
+        // Right now, s1 should be on s0's left.
+        assert_eq!(tree1.root.value(), 4);
+        assert_eq!(tree1.root.left().value(), 3);
+
+        let mut tree2 = RBTree::new();
+     
+        tree2.insert_with(x_int, &0.1, s0.clone(), 4);
+        tree2.insert_with(x_int, &0.1, s1.clone(), 3);
+
+        // Right now, s1 should be on s0's right.
+        assert_eq!(tree2.root.value(), 4);
+        assert_eq!(tree2.root.right().value(), 3);
+
     }
 }
