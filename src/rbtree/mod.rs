@@ -1,5 +1,7 @@
 mod node;
 
+use std::cmp::Ordering;
+
 use node::*;
 
 pub struct RBTree<K, V> {
@@ -19,10 +21,9 @@ impl<K, V> RBTree<K, V> {
         self.size == 0
     }
 
-    pub fn find_with<U, D, F>(&self, f: F, x: &D, k: K) -> Option<TreeElement<K, V>>
+    pub fn find_with<D, F>(&self, cmp_op: F, x: &D, k: K) -> Option<TreeElement<K, V>>
     where
-        U: PartialOrd,
-        F: Fn(&K, &D) -> U,
+        F: Fn(&K, &K, &D) -> Ordering,
     {
         if self.is_empty() {
             return None;
@@ -33,13 +34,13 @@ impl<K, V> RBTree<K, V> {
         while !parent.is_null() {
             let p_k = parent.key();
 
-            if f(&p_k, x) == f(&k, x) {
-                let elem = TreeElement::new(&parent);
-                return Some(elem);
-            } else if f(&p_k, x) > f(&k, x) {
-                parent = parent.left();
-            } else {
-                parent = parent.right();
+            match cmp_op(&p_k, &k, x) {
+                Ordering::Less => parent = parent.left(),
+                Ordering::Equal => {
+                    let elem = TreeElement::new(&parent);
+                    return Some(elem);
+                },
+                Ordering::Greater => parent = parent.right(),
             }
         }
 
@@ -50,10 +51,9 @@ impl<K, V> RBTree<K, V> {
     /// function `f: (K, D) -> U` where `K` is the type of the key, `D` is another type
     /// which makes `f` the dynamic insertion function, and `U` is their output. In this way,
     /// `U`'s behavior on `K` depends on whatever value is passed to `D`.
-    pub fn insert_with<U, D, F>(&mut self, f: F, x: &D, k: K, v: V)
+    pub fn insert_with<D, F>(&mut self, cmp_op: F, x: &D, k: K, v: V)
     where
-        U: PartialOrd,
-        F: Fn(&K, &D) -> U,
+        F: Fn(&K, &K, &D) -> Ordering,
     {
         let n = NodePtr::new(k, v);
 
@@ -61,14 +61,13 @@ impl<K, V> RBTree<K, V> {
             self.root = n;
             self.size += 1;
         } else {
-            self.insert_with_aux(f, x, n);
+            self.insert_with_aux(cmp_op, x, n);
         }
     }
 
-    fn insert_with_aux<U, D, F>(&mut self, f: F, x: &D, mut n: NodePtr<K, V>)
+    fn insert_with_aux<D, F>(&mut self, cmp_op: F, x: &D, mut n: NodePtr<K, V>)
     where
-        U: PartialOrd,
-        F: Fn(&K, &D) -> U,
+        F: Fn(&K, &K, &D) -> Ordering,
     {
         // we can assume that there is a root.
         let mut y = self.root.clone();
@@ -82,28 +81,31 @@ impl<K, V> RBTree<K, V> {
 
             let y_k = y.key();
 
-            if f(&n_k, x) == f(&y_k, x) {
-                // change the value of y.
-                y.set_value(n.value());
-                self.size += 1;
-                return; // do nothing else.
-            } else if f(&n_k, x) > f(&y_k, x) {
-                // insert n to y's right.
-                child = y.right();
-                y = child;
-            } else {
-                // insert n to y's left.
-                child = y.left();
-                y = child;
+            match cmp_op(&n_k, &y_k, x) {
+                Ordering::Less => {
+                    // insert n to y's left.
+                    child = y.left();
+                    y = child;
+                },
+                Ordering::Equal => {
+                    // actually do nothing but changes the y value.
+                    y.set_value(n.value());
+                    self.size += 1;
+                    return; // do nothing else.
+                },
+                Ordering::Greater => {
+                    // insert n to y's right.
+                    child = y.right();
+                    y = child;
+                },
             }
         }
 
         let p_k = parent.key();
 
-        if f(&n_k, x) > f(&p_k, x) {
-            parent.set_right(&n);
-        } else {
-            parent.set_left(&n);
+        match cmp_op(&n_k, &p_k, x) {
+            Ordering::Greater => parent.set_right(&n),
+            _                 => parent.set_left(&n),
         }
 
         n.set_parent(&parent);
@@ -493,6 +495,13 @@ mod tests {
         (y - b) / m
     }
 
+    fn cmp_by_x_int(s0: &Segment, s1: &Segment, y: &f64) -> Ordering {
+        let x0 = x_int(s0, y);
+        let x1 = x_int(s1, y);
+
+        x0.partial_cmp(&x1).unwrap()
+    }
+
     // Some tests for a dynamic red black tree.
     #[test]
     fn insert_dynamic_empty_tree() {
@@ -501,8 +510,8 @@ mod tests {
         let s0: Segment = ((0.0, 0.0), (1.0, 2.0));
         let s1: Segment = ((0.0, 1.0), (2.0, -1.0));
 
-        tree1.insert_with(x_int, &0.9, s0.clone(), 4);
-        tree1.insert_with(x_int, &0.9, s1.clone(), 3);
+        tree1.insert_with(cmp_by_x_int, &0.9, s0.clone(), 4);
+        tree1.insert_with(cmp_by_x_int, &0.9, s1.clone(), 3);
 
         // Right now, s1 should be on s0's left.
         assert_eq!(tree1.root.value(), 4);
@@ -510,8 +519,8 @@ mod tests {
 
         let mut tree2 = RBTree::new();
 
-        tree2.insert_with(x_int, &0.1, s0.clone(), 4);
-        tree2.insert_with(x_int, &0.1, s1.clone(), 3);
+        tree2.insert_with(cmp_by_x_int, &0.1, s0.clone(), 4);
+        tree2.insert_with(cmp_by_x_int, &0.1, s1.clone(), 3);
 
         // Right now, s1 should be on s0's right.
         assert_eq!(tree2.root.value(), 4);
