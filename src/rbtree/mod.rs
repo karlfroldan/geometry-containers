@@ -1,6 +1,6 @@
 mod node;
 
-use std::{cmp::Ordering};
+use std::cmp::Ordering;
 
 use node::*;
 
@@ -9,11 +9,32 @@ pub struct RBTree<K, V> {
     size: usize,
 }
 
+impl<K, V> Default for RBTree<K, V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<K, V> Drop for RBTree<K, V> {
+    fn drop(&mut self) {
+        let mut root = self.root.clone();
+        self.drop_recursive(&mut root);
+    }
+}
+
 impl<K, V> RBTree<K, V> {
     pub fn new() -> Self {
         Self {
             root: NodePtr::null(),
             size: 0,
+        }
+    }
+
+    fn drop_recursive(&mut self, n: &mut NodePtr<K, V>) {
+        if !n.is_null() {
+            self.drop_recursive(&mut n.left());
+            self.drop_recursive(&mut n.right());
+            n.dealloc();
         }
     }
 
@@ -38,7 +59,7 @@ impl<K, V> RBTree<K, V> {
         x.set_right(&y.left());
 
         if !y.left().is_null() {
-            y.left().set_parent(&x);
+            y.left().set_parent(x);
         }
 
         // Link x's parent to y.
@@ -73,7 +94,7 @@ impl<K, V> RBTree<K, V> {
         x.set_left(&y.right());
 
         if !y.right().is_null() {
-            y.right().set_parent(&x);
+            y.right().set_parent(x);
         }
 
         // Link x's parent to y.
@@ -109,12 +130,12 @@ impl<K, V> RBTree<K, V> {
                 Ordering::Equal => {
                     let elem = TreeElement::new(&parent);
                     return Some(elem);
-                },
+                }
                 Ordering::Greater => parent = parent.right(),
             }
         }
 
-        return None;
+        None
     }
 
     /// The function `insert_with` inserts into a binary search tree with a priority
@@ -144,7 +165,6 @@ impl<K, V> RBTree<K, V> {
         // we can assume that there is a root.
         let mut y = self.root.clone();
         let mut parent: NodePtr<K, V> = NodePtr::null();
-        let mut child: NodePtr<K, V>; // placeholder.
 
         let n_k = n.key();
 
@@ -161,7 +181,7 @@ impl<K, V> RBTree<K, V> {
                     y.set_value(n.value());
                     self.size += 1;
                     return; // do nothing else.
-                },
+                }
                 Ordering::Greater => y = y.right(),
             }
         }
@@ -170,7 +190,7 @@ impl<K, V> RBTree<K, V> {
 
         match cmp_op(&n_k, &p_k, x) {
             Ordering::Greater => parent.set_right(&n),
-            _                 => parent.set_left(&n),
+            _ => parent.set_left(&n),
         }
 
         n.set_parent(&parent);
@@ -185,10 +205,9 @@ impl<K, V> RBTree<K, V> {
 
         while z.parent().color() == Color::Red {
             grandparent = z.parent().parent();
-            
+
             // If z's parent is the left child.
             if z.parent().is_node_same(&grandparent.left()) {
-                
                 let mut y = grandparent.right(); // the uncle.
 
                 if y.color() == Color::Red {
@@ -235,7 +254,6 @@ impl<K, V> RBTree<K, V> {
         }
 
         self.root.set_color(Color::Black)
-
     }
 
     // Some functions to test red-black tree properties.
@@ -251,7 +269,7 @@ impl<K, V> RBTree<K, V> {
         self.root.red_node_has_black_children()
     }
 
-    // // All simple paths from the node to descendant leaves contain the same number of 
+    // // All simple paths from the node to descendant leaves contain the same number of
     // // black nodes.
     // #[allow(dead_code)]
     // fn simple_path_property(&self) -> bool {
@@ -264,22 +282,18 @@ impl<K: Ord, V> RBTree<K, V> {
         // we can assume that there is a root.
         let mut y = self.root.clone();
         let mut parent: NodePtr<K, V> = NodePtr::null();
-        let mut child: NodePtr<K, V>; // placeholder.
 
         while !y.is_null() {
             parent = y.clone();
 
-            if n == y {
-                // change the value of y.
-                y.set_value(n.value());
-                self.size += 1;
-                return; // do nothing else.
-            } else if n > y {
-                // insert n to y's right.
-                y = y.right();
-            } else {
-                // insert n to y's left.
-                y = y.left();
+            match Ord::cmp(&n, &y) {
+                Ordering::Less => y = y.left(),
+                Ordering::Greater => y = y.right(),
+                Ordering::Equal => {
+                    y.set_value(n.value());
+                    self.size += 1;
+                    return; // do nothing else.
+                }
             }
         }
 
@@ -319,17 +333,14 @@ impl<K: Ord, V> RBTree<K, V> {
         let mut parent = self.root.clone();
 
         while !parent.is_null() {
-            if parent.key() == k {
-                let elem = TreeElement::new(&parent);
-                return Some(elem);
-            } else if parent.key() > k {
-                parent = parent.left();
-            } else {
-                parent = parent.right();
+            match Ord::cmp(&k, &parent.key()) {
+                Ordering::Less => parent = parent.left(),
+                Ordering::Equal => return Some(TreeElement::new(&parent)),
+                Ordering::Greater => parent = parent.right(),
             }
         }
 
-        return None;
+        None
     }
 
     pub fn remove(&mut self, n: TreeElement<K, V>) {
@@ -354,7 +365,7 @@ impl<K: Ord, V> RBTree<K, V> {
                 self.root = NodePtr::null();
             }
 
-            ptr.drop_in_place();
+            ptr.dealloc();
         // Has two children.
         } else if ptr.has_left() && ptr.has_right() {
             let mut succ = ptr.successor();
@@ -371,7 +382,7 @@ impl<K: Ord, V> RBTree<K, V> {
                 parent_2.set_left_null();
             }
 
-            ptr.drop_in_place();
+            ptr.dealloc();
 
         // When there is only one child.
         } else {
@@ -404,7 +415,7 @@ impl<K: Ord, V> RBTree<K, V> {
                 }
             }
 
-            ptr.drop_in_place();
+            ptr.dealloc();
         }
 
         self.size -= 1;

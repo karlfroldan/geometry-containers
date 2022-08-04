@@ -27,7 +27,7 @@ pub struct NodePtr<K, V>(*mut Node<K, V>);
 
 impl<K, V> Clone for NodePtr<K, V> {
     fn clone(&self) -> Self {
-        Self(self.0.clone())
+        Self(self.0)
     }
 }
 
@@ -38,7 +38,8 @@ impl<K, V> NodePtr<K, V> {
         Self::from_node(n)
     }
 
-    /// Create a new empty node pointer.
+    /// Create a new empty node pointer
+    #[inline]
     pub fn null() -> Self {
         NodePtr(ptr::null_mut())
     }
@@ -52,11 +53,13 @@ impl<K, V> NodePtr<K, V> {
     }
 
     /// Get the associated key from the node that the pointer is pointing to.
+    #[inline]
     pub fn key(&self) -> K {
         unsafe { self.0.read() }.key
     }
 
     /// Get the associated value from the node that the pointer is pointing to.
+    #[inline]
     pub fn value(&self) -> V {
         unsafe { self.0.read() }.value
     }
@@ -69,10 +72,15 @@ impl<K, V> NodePtr<K, V> {
         }
     }
 
-    pub fn drop_in_place(&self) {
-        unsafe { self.0.drop_in_place() };
+    #[inline]
+    pub fn dealloc(&mut self) {
+        unsafe {
+            Box::from_raw(self.0);
+        }
+        self.0 = ptr::null_mut();
     }
 
+    #[inline]
     pub fn is_null(&self) -> bool {
         self.0.is_null()
     }
@@ -104,6 +112,7 @@ impl<K, V> NodePtr<K, V> {
         }
     }
 
+    #[inline]
     pub fn set_color(&mut self, color: Color) {
         // We can only change the color of non-leaf nodes.
         if !self.is_null() {
@@ -111,6 +120,7 @@ impl<K, V> NodePtr<K, V> {
         }
     }
 
+    #[inline]
     /// Set the right child of the current node pointer.
     pub fn set_right(&mut self, other: &Self) {
         if !self.is_null() {
@@ -118,6 +128,7 @@ impl<K, V> NodePtr<K, V> {
         }
     }
 
+    #[inline]
     /// Set the parent of the current node pointer.
     pub fn set_parent(&mut self, other: &Self) {
         if !self.is_null() {
@@ -125,6 +136,7 @@ impl<K, V> NodePtr<K, V> {
         }
     }
 
+    #[inline]
     /// Set the left child of the current node pointer.
     pub fn set_left(&mut self, other: &Self) {
         if !self.is_null() {
@@ -257,7 +269,6 @@ impl<K, V> NodePtr<K, V> {
     //      *  / \           / \
     //      * 1   2         2   3
     //      */
-
     //     let mut b = self.left();
     //     let mut node_2 = b.right();
 
@@ -294,10 +305,12 @@ impl<K, V> NodePtr<K, V> {
 
             let predicate_value = match self.color() {
                 Color::Black => true,
-                Color::Red   => left.color() == Color::Black && right.color() == Color::Black,
+                Color::Red => left.color() == Color::Black && right.color() == Color::Black,
             };
 
-            left.red_node_has_black_children() && right.red_node_has_black_children() && predicate_value
+            left.red_node_has_black_children()
+                && right.red_node_has_black_children()
+                && predicate_value
         }
     }
 
@@ -375,7 +388,6 @@ impl<K: Debug, V: Debug> NodePtr<K, V> {
 
             self.left().show_tree_aux(depth + 1);
             self.right().show_tree_aux(depth + 1);
-
         } else {
             println!("{spaces}- NULL | BLACK");
         }
@@ -580,5 +592,16 @@ mod tests {
         let succ = n0.successor();
 
         assert!(succ.is_null());
+    }
+
+    #[test]
+    fn drop_node() {
+        let mut n = NodePtr::new(10, 11);
+
+        assert_eq!(n.key(), 10);
+
+        n.dealloc();
+
+        assert!(n.is_null());
     }
 }
