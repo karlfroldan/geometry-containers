@@ -1,7 +1,46 @@
+//BSD 3-Clause License
+
+// Copyright (c) 2022, Karl Roldan
+// All rights reserved.
+
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or promote products derived from
+//    this software without specific prior written permission.
+
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+/// A Red-Black Tree structure that allows dynamic keys. That is, the key stored in the 
+/// tree is not the one being used for comparisons. Instead, there is another comparison 
+/// function `f: (Key, Key, D) -> Ordering` where `D` is the type of the comparison modifier.
+/// An example of this is a comparison function of line segments where the *priority* is the
+/// `x`-intercept. In this way `D` is the set of `y`-intercepts.
+/// 
+/// This red-black tree implementation is driven by the needs of sweep-line algorithms but can be used
+/// for other things if needed.
+
 mod node;
-
 use std::cmp::Ordering;
-
+use std::fmt::Debug;
 use node::*;
 
 pub struct RBTree<K, V> {
@@ -112,6 +151,7 @@ impl<K, V> RBTree<K, V> {
         x.set_parent(&y);
     }
 
+    /// Find the element of a tree given a comparison function, a modifier, and the key.
     pub fn find_with<D, F>(&self, cmp_op: F, x: &D, k: K) -> Option<TreeElement<K, V>>
     where
         F: Fn(&K, &K, &D) -> Ordering,
@@ -269,12 +309,134 @@ impl<K, V> RBTree<K, V> {
         self.root.red_node_has_black_children()
     }
 
-    // // All simple paths from the node to descendant leaves contain the same number of
-    // // black nodes.
-    // #[allow(dead_code)]
-    // fn simple_path_property(&self) -> bool {
-    //     self.root.simple_path()
-    // }
+    /// Delete the node given a node pointer and return the key and value.
+    pub fn delete(&mut self, n: TreeElement<K, V>) -> (K, V) {
+        let mut z = n.nodeptr;
+        let mut x;
+        let p_color = z.color();
+
+        // we have three cases:
+        // 1. is leaf. This is easy.
+        // 2. has one child.
+        // 3. has two children.
+
+        let mut parent = z.parent();
+
+        if !z.has_left() && !z.has_right() {
+            // z has no children.
+            
+            // Simply remove it.
+            if parent.left().is_node_same(&z) {
+                // z is the left child.
+                parent.set_left_null();
+            } else {
+                parent.set_right_null();
+            }
+
+            if self.root.is_node_same(&z) {
+                self.root = NodePtr::null();
+            }
+
+            x = self.root;
+
+        } else if z.has_left() && z.has_right() {
+
+            let mut succ = z.successor();
+
+            // swap their contents.
+            z.swap(&mut succ);
+
+            // z's content is now in the leaf succ
+            let mut parent_2 = succ.parent();
+
+            if parent_2.left().is_node_same(&succ) {
+                parent_2.set_left_null();
+            } else {
+                parent_2.set_right_null();
+            }
+
+            if z.has_right() {
+                x = z.right();
+            } else {
+                x = z.left();
+            }
+
+        } else {
+            // z has one child.
+            if z.has_left() {
+                let mut left = z.left();
+
+                if parent.left().is_node_same(&z) {
+                    // is the left child.
+                    parent.set_left(&left);
+                } else {
+                    parent.set_right(&left);
+                }
+
+                left.set_parent(&parent);
+
+                if self.root.is_node_same(&z) {
+                    self.root = left;
+                }
+
+                x = left;
+            } else {
+                // z has right.
+                let mut right = z.right();
+
+                if parent.left().is_node_same(&z) {
+                    parent.set_left(&right);
+                } else {
+                    parent.set_right(&right);
+                }
+
+                right.set_parent(&parent);
+
+                if self.root.is_node_same(&z) {
+                    self.root = right;
+                }
+
+                x = right;
+            }
+        }
+
+        if p_color == Color::Black {
+            self.delete_fixup(&mut x)
+        }
+
+        self.size -= 1;
+        z.move_out()
+    }
+
+    fn delete_fixup(&mut self, z: &mut NodePtr<K, V>) {
+
+    }
+
+    /// Deletes a node from the tree and returns the key-value pair.
+    pub fn remove_with<F, D>(&mut self, cmp_op: F, x: &D, k: K) -> Option<(K, V)>
+    where 
+        F: Fn(&K, &K, &D) -> Ordering,
+    {
+        let elem = self.find_with(cmp_op, x, k);
+
+        match elem {
+            None    => None,
+            Some(n) => Some(self.delete(n)),
+        }
+    }
+
+    #[inline]
+    fn transplant(&mut self, u: &mut NodePtr<K, V>, v: &mut NodePtr<K, V>) {
+        if u.parent().is_null() {
+            self.root = u.clone();
+        } else if u.is_node_same(&u.parent().left()) {
+            u.parent().set_left(v);
+        } else {
+            u.parent().set_right(&v);
+        }
+
+        v.set_parent(&u.parent());
+    }
 }
 
 impl<K: Ord, V> RBTree<K, V> {
@@ -284,7 +446,7 @@ impl<K: Ord, V> RBTree<K, V> {
         let mut parent: NodePtr<K, V> = NodePtr::null();
 
         while !y.is_null() {
-            parent = y.clone();
+            parent = y;
 
             match Ord::cmp(&n, &y) {
                 Ordering::Less => y = y.left(),
@@ -324,7 +486,7 @@ impl<K: Ord, V> RBTree<K, V> {
         self.root.set_color(Color::Black);
     }
 
-    /// Give some key, find the node with that key in the tree.
+    /// Find the element of the tree with the given key.
     pub fn find(&self, k: K) -> Option<TreeElement<K, V>> {
         if self.is_empty() {
             return None;
@@ -343,82 +505,22 @@ impl<K: Ord, V> RBTree<K, V> {
         None
     }
 
-    pub fn remove(&mut self, n: TreeElement<K, V>) {
-        let mut ptr = n.nodeptr;
+    /// Delete an element from the tree.
+    pub fn remove(&mut self, k: K) -> Option<(K, V)> {
+        let elem = self.find(k);
 
-        // we have three cases:
-        // 1. is leaf. This is easy.
-        // 2. has one child.
-        // 3. has two children.
-
-        let mut parent = ptr.parent();
-
-        // CASE 1. Ptr is leaf.
-        if !ptr.has_left() && !ptr.has_right() {
-            if !parent.is_null() {
-                if parent.left().is_node_same(&ptr) {
-                    parent.set_left_null();
-                } else {
-                    parent.set_right_null();
-                }
-            } else {
-                self.root = NodePtr::null();
-            }
-
-            ptr.dealloc();
-        // Has two children.
-        } else if ptr.has_left() && ptr.has_right() {
-            let mut succ = ptr.successor();
-
-            // swap the key and value of succ and ptr.
-            ptr.swap(&mut succ);
-
-            // then delete `succ`.
-            let mut parent_2 = succ.parent();
-
-            if parent_2.is_node_same(&ptr) {
-                parent_2.set_right_null();
-            } else {
-                parent_2.set_left_null();
-            }
-
-            ptr.dealloc();
-
-        // When there is only one child.
+        if let Some(e) = elem {
+            Some(self.delete(e))
         } else {
-            if ptr.has_left() {
-                let mut pred = ptr.predecessor();
-
-                ptr.swap(&mut pred);
-
-                // then delete `pred`.
-                let mut parent_2 = pred.parent();
-
-                if parent_2.is_node_same(&ptr) {
-                    parent_2.set_left_null();
-                } else {
-                    parent_2.set_right_null();
-                }
-            } else {
-                let mut succ = ptr.successor();
-
-                // swap the key and value of succ and ptr.
-                ptr.swap(&mut succ);
-
-                // then delete `succ`.
-                let mut parent_2 = succ.parent();
-
-                if parent_2.is_node_same(&ptr) {
-                    parent_2.set_right_null();
-                } else {
-                    parent_2.set_left_null();
-                }
-            }
-
-            ptr.dealloc();
+            None
         }
+    }
+}
 
-        self.size -= 1;
+impl<K: Debug, V: Debug> RBTree<K, V> {
+    #[allow(dead_code)]
+    fn show_tree(&self) {
+        self.root.show_tree();
     }
 }
 
@@ -431,14 +533,6 @@ pub struct TreeElement<K, V> {
 impl<K, V> TreeElement<K, V> {
     fn new(n: &NodePtr<K, V>) -> Self {
         Self { nodeptr: n.clone() }
-    }
-
-    pub fn key(&self) -> K {
-        self.nodeptr.key()
-    }
-
-    pub fn value(&self) -> V {
-        self.nodeptr.value()
     }
 
     pub fn successor(&self) -> Option<Self> {
@@ -470,36 +564,21 @@ impl<K, V> TreeElement<K, V> {
     }
 }
 
+impl<K: Clone, V: Clone> TreeElement<K, V> {
+    pub fn key(&self) -> K {
+        self.nodeptr.key().clone()
+    }
+
+    pub fn value(&self) -> V {
+        self.nodeptr.value().clone()
+    }
+}
+
+// impl <K: Clone, V: Clone>
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // #[test]
-    // fn left_rotate_test() {
-    //     let mut p = NodePtr::new(4, 3);
-    //     let mut a = NodePtr::new(5, 1);
-    //     let mut b = NodePtr::new(1, 5);
-    //     let mut c = NodePtr::new(100, -4);
-
-    //     p.set_left(&a);
-    //     a.set_parent(&p);
-
-    //     a.set_right(&b);
-    //     b.set_parent(&a);
-
-    //     c.set_parent(&b);
-    //     b.set_left(&c);
-
-    //     assert_eq!(p.left().key(), a.key());
-    //     assert_ne!(a.right().key(), c.key());
-
-    //     a.left_rotate();
-
-    //     assert_eq!(p.left().key(), b.key());
-    //     assert_eq!(a.right().key(), c.key());
-    //     assert!(a.left().is_null());
-    //     assert!(a.parent().is_node_same(&b));
-    // }
 
     #[test]
     fn inserting_to_empty_tree() {
@@ -581,23 +660,27 @@ mod tests {
         assert!(x.is_none());
     }
 
-    // #[test]
-    // fn delete_singleton() {
-    //     let mut tree = RBTree::new();
+    #[test]
+    fn remove_singleton() {
+        let mut tree = RBTree::new();
 
-    //     tree.insert(14, 10);
+        tree.insert(14, 10);
+        tree.remove(14);
+        assert!(tree.is_empty());
+        assert!(tree.root.is_null());
+    }
 
-    //     let n = tree.find(14).unwrap();
+    #[test]
+    fn delete_singleton() {
+        let mut tree = RBTree::new();
 
-    //     println!("size: {}", tree.size);
+        tree.insert(14, 10);
 
-    //     tree.remove(n);
-
-    //     println!("size: {}", tree.size);
-
-    //     assert!(tree.is_empty());
-    //     assert!(tree.root.is_null());
-    // }
+        let n = tree.find(14).unwrap();
+        tree.delete(n);
+        assert!(tree.is_empty());
+        assert!(tree.root.is_null());
+    }
 
     // #[test]
     // fn delete_leaf() {
@@ -607,11 +690,13 @@ mod tests {
     //     tree.insert(15, 12);
 
     //     let n = tree.find(15).unwrap();
-    //     tree.remove(n);
+    //     tree.delete(n);
 
-    //     assert_eq!(tree.root.key(), 14);
-    //     assert_eq!(tree.size, 1);
-    //     assert!(!tree.root.has_right());
+    //     // tree.show_tree();
+
+    //     // assert_eq!(tree.root.key(), 14);
+    //     // assert_eq!(tree.size, 1);
+    //     // assert!(!tree.root.has_right());
     // }
 
     // #[test]

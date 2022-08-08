@@ -22,7 +22,7 @@ pub struct Node<K, V> {
     color: Color,
 }
 
-#[derive(Debug, Copy)]
+#[derive(Debug)]
 pub struct NodePtr<K, V>(*mut Node<K, V>);
 
 impl<K, V> Clone for NodePtr<K, V> {
@@ -30,6 +30,8 @@ impl<K, V> Clone for NodePtr<K, V> {
         Self(self.0)
     }
 }
+
+impl<K, V> Copy for NodePtr<K, V> {}
 
 impl<K, V> NodePtr<K, V> {
     /// Create a new node allocated on the heap from the key and the value.
@@ -64,6 +66,11 @@ impl<K, V> NodePtr<K, V> {
         unsafe { self.0.read() }.value
     }
 
+    // #[inline]
+    // pub fn move_out(&self) -> K {
+    //     unsafe { (*(self.0)).key }
+    // }
+
     pub fn color(&self) -> Color {
         if self.0.is_null() {
             Color::Black
@@ -74,9 +81,6 @@ impl<K, V> NodePtr<K, V> {
 
     #[inline]
     pub fn dealloc(&mut self) {
-        unsafe {
-            Box::from_raw(self.0);
-        }
         self.0 = ptr::null_mut();
     }
 
@@ -159,6 +163,7 @@ impl<K, V> NodePtr<K, V> {
     }
 
     /// Get the maximum node reachable from this node.
+    #[allow(dead_code)]
     pub fn maximum(&self) -> Self {
         let mut y = self;
         let mut right = self.clone();
@@ -173,6 +178,7 @@ impl<K, V> NodePtr<K, V> {
     }
 
     /// Swap the keys and values of two nodes.
+    #[inline]
     pub fn swap(&mut self, other: &mut Self) {
         let k1 = self.key();
         let v1 = self.value();
@@ -185,6 +191,37 @@ impl<K, V> NodePtr<K, V> {
 
         unsafe { (*other.0).key = k1 };
         unsafe { (*other.0).value = v1 };
+    }
+
+    /// Swap the nodes internally, setting pointers from each other. 
+    pub fn swap_nodes(&mut self, other: &mut Self) {
+        let k1 = self.key();
+        let v1 = self.value();
+        let l1 = self.left();
+        let r1 = self.right();
+        let p1 = self.parent();
+        let c1 = self.color();
+
+        let k2 = other.key();
+        let v2 = other.value();
+        let l2 = other.left();
+        let r2 = other.right();
+        let p2 = other.parent();
+        let c2 = other.color();
+
+        unsafe { (*self.0).key = k2 };
+        unsafe { (*self.0).value = v2 };
+        self.set_left(&l2);
+        self.set_right(&r2);
+        self.set_parent(&p2);
+        self.set_color(c2);
+
+        unsafe { (*other.0).key = k1 };
+        unsafe { (*other.0).value = v1 };
+        other.set_left(&l1);
+        other.set_right(&r1);
+        other.set_parent(&p1);
+        other.set_color(c1);
     }
 
     pub fn successor(&self) -> Self {
@@ -206,14 +243,24 @@ impl<K, V> NodePtr<K, V> {
         }
     }
 
+    // destroy the node and move the pointers out.
+    pub fn move_out(&mut self) -> (K, V) {
+        let b = unsafe {Box::from_raw(self.0)};
+        b.move_out()
+    }
+
+    #[inline]
     pub fn has_left(&self) -> bool {
         !self.left().is_null()
     }
 
+    #[inline]
     pub fn has_right(&self) -> bool {
         !self.right().is_null()
     }
 
+    #[allow(dead_code)]
+    #[inline]
     pub fn has_parent(&self) -> bool {
         !self.parent().is_null()
     }
@@ -237,23 +284,40 @@ impl<K, V> NodePtr<K, V> {
         }
     }
 
+    #[inline]
+    #[allow(dead_code)]
     pub fn set_parent_null(&mut self) {
-        unsafe { (*self.0).parent = NodePtr::null() };
+        if !self.is_null() {
+            unsafe { (*self.0).parent = NodePtr::null() };
+        }
+        
     }
 
+    #[inline]
     pub fn set_left_null(&mut self) {
-        unsafe { (*self.0).left = NodePtr::null() };
+        if !self.is_null() {
+            unsafe { (*self.0).left = NodePtr::null() };
+        }   
+        
     }
 
+    #[inline]
     pub fn set_right_null(&mut self) {
-        unsafe { (*self.0).right = NodePtr::null() };
+        if !self.is_null() {
+            unsafe { (*self.0).right = NodePtr::null() };
+        }   
     }
 
+    #[inline]
     pub fn set_value(&mut self, v: V) {
-        unsafe { (*self.0).value = v };
+        if !self.is_null() {
+            unsafe { (*self.0).value = v };
+        }
+       
     }
 
     /// Check if two node pointers are pointing to the same node.
+    #[inline]
     pub fn is_node_same(&self, other: &Self) -> bool {
         ptr::eq(self.0, other.0)
     }
@@ -314,6 +378,7 @@ impl<K, V> NodePtr<K, V> {
         }
     }
 
+    #[allow(dead_code)]
     fn count_path(&self) -> (usize, bool) {
         if self.is_null() {
             (1, true)
@@ -366,6 +431,11 @@ impl<K, V> Node<K, V> {
             right: NodePtr::null(),
             color: Color::Red,
         }
+    }
+
+    #[inline]
+    pub fn move_out(self) -> (K, V) {
+        (self.key, self.value)
     }
 }
 
