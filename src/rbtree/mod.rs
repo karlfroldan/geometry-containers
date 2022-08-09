@@ -28,6 +28,14 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+// RED-BLACK TREE DELETE AND DELETE-FIXUP CODE IS LICENSED BY
+// Copyright 2017-2018 By tickdream125@hotmail.com.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
 
 /// A Red-Black Tree structure that allows dynamic keys. That is, the key stored in the 
 /// tree is not the one being used for comparisons. Instead, there is another comparison 
@@ -77,6 +85,11 @@ impl<K, V> RBTree<K, V> {
         }
     }
 
+    // Check if the given node is the root of the tree.
+    fn is_root(&self, n: &NodePtr<K, V>) -> bool {
+        self.root.ptr_eq(n)
+    }
+
     pub fn is_empty(&self) -> bool {
         self.size == 0
     }
@@ -106,7 +119,7 @@ impl<K, V> RBTree<K, V> {
 
         if x.parent().is_null() {
             self.root = y.clone();
-        } else if x.is_node_same(&x.parent().left()) {
+        } else if x.ptr_eq(&x.parent().left()) {
             x.parent().set_left(&y);
         } else {
             x.parent().set_right(&y);
@@ -141,7 +154,7 @@ impl<K, V> RBTree<K, V> {
 
         if x.parent().is_null() {
             self.root = y.clone();
-        } else if x.is_node_same(&x.parent().left()) {
+        } else if x.ptr_eq(&x.parent().left()) {
             x.parent().set_left(&y);
         } else {
             x.parent().set_right(&y);
@@ -247,7 +260,7 @@ impl<K, V> RBTree<K, V> {
             grandparent = z.parent().parent();
 
             // If z's parent is the left child.
-            if z.parent().is_node_same(&grandparent.left()) {
+            if z.parent().ptr_eq(&grandparent.left()) {
                 let mut y = grandparent.right(); // the uncle.
 
                 if y.color() == Color::Red {
@@ -257,7 +270,7 @@ impl<K, V> RBTree<K, V> {
                     grandparent.set_color(Color::Red);
                     z = grandparent;
                 } else {
-                    if z.is_node_same(&z.parent().right()) {
+                    if z.ptr_eq(&z.parent().right()) {
                         // CASE 2
                         z = z.parent();
                         self.left_rotate(&mut z);
@@ -279,7 +292,7 @@ impl<K, V> RBTree<K, V> {
                     grandparent.set_color(Color::Red);
                     z = grandparent;
                 } else {
-                    if z.is_node_same(&z.parent().left()) {
+                    if z.ptr_eq(&z.parent().left()) {
                         // CASE 2
                         z = z.parent();
                         self.right_rotate(&mut z);
@@ -311,105 +324,93 @@ impl<K, V> RBTree<K, V> {
 
     /// Delete the node given a node pointer and return the key and value.
     pub fn delete(&mut self, n: TreeElement<K, V>) -> (K, V) {
-        let mut z = n.nodeptr;
-        let mut x;
-        let p_color = z.color();
+        // Modified implementation from `tickbh/rbtree-rs`
+        // This piece of code is licensed under MIT as stated in 
+        // the file header.
+        let node = n.nodeptr;
+        let mut child: NodePtr<K, V>;
+        let mut parent: NodePtr<K, V>;
+        let color: Color;
 
-        // we have three cases:
-        // 1. is leaf. This is easy.
-        // 2. has one child.
-        // 3. has two children.
+        // If the node has two children.
+        if node.has_left() && node.has_right() {
+            // replace the current node with its successor.
+            let mut succ = node.successor();
 
-        let mut parent = z.parent();
-
-        if !z.has_left() && !z.has_right() {
-            // z has no children.
-            
-            // Simply remove it.
-            if parent.left().is_node_same(&z) {
-                // z is the left child.
-                parent.set_left_null();
+            if self.is_root(&node) {
+                self.root = succ;
             } else {
-                parent.set_right_null();
+                // If the node is the left child.
+                if node.parent().left().ptr_eq(&node) {
+                    node.parent().set_left(&succ);
+                } else {
+                    node.parent().set_right(&succ);
+                }
             }
 
-            if self.root.is_node_same(&z) {
-                self.root = NodePtr::null();
-            }
+            // In this case, the `child` is the `right` of `succ`
+            child = succ.right();
+            parent = succ.parent();
+            color = succ.color();
 
-            x = self.root;
-
-        } else if z.has_left() && z.has_right() {
-
-            let mut succ = z.successor();
-
-            // swap their contents.
-            z.swap(&mut succ);
-
-            // z's content is now in the leaf succ
-            let mut parent_2 = succ.parent();
-
-            if parent_2.left().is_node_same(&succ) {
-                parent_2.set_left_null();
+            if parent.ptr_eq(&node) {
+                parent = succ;
             } else {
-                parent_2.set_right_null();
+                if !child.is_null() {
+                    child.set_parent(&parent);
+                }
+
+                parent.set_left(&child);
+                succ.set_right(&node.right());
+                node.right().set_parent(&succ);
             }
 
-            if z.has_right() {
-                x = z.right();
-            } else {
-                x = z.left();
+            succ.set_parent(&node.parent());
+            succ.set_color(node.color());
+            succ.set_left(&node.left());
+            node.left().set_parent(&succ);
+
+            if color == Color::Black {
+                self.delete_fixup(child,  parent);
             }
 
+            self.size -= 1;
+            let closure = move || NodePtr::move_out(node);
+            return closure();
+        } 
+        
+        if node.has_left() {
+            child = node.left();
         } else {
-            // z has one child.
-            if z.has_left() {
-                let mut left = z.left();
+            child = node.right();
+        }
 
-                if parent.left().is_node_same(&z) {
-                    // is the left child.
-                    parent.set_left(&left);
-                } else {
-                    parent.set_right(&left);
-                }
+        parent = node.parent();
+        color = node.color();
 
-                left.set_parent(&parent);
+        if !child.is_null() {
+            child.set_parent(&parent);
+        }
 
-                if self.root.is_node_same(&z) {
-                    self.root = left;
-                }
-
-                x = left;
+        if self.root.ptr_eq(&node) {
+            self.root = child;
+        } else {
+            if parent.left().ptr_eq(&node) {
+                parent.set_left(&child);
             } else {
-                // z has right.
-                let mut right = z.right();
-
-                if parent.left().is_node_same(&z) {
-                    parent.set_left(&right);
-                } else {
-                    parent.set_right(&right);
-                }
-
-                right.set_parent(&parent);
-
-                if self.root.is_node_same(&z) {
-                    self.root = right;
-                }
-
-                x = right;
+                parent.set_right(&child);
             }
         }
 
-        if p_color == Color::Black {
-            self.delete_fixup(&mut x)
+        if color == Color::Black {
+            self.delete_fixup(child, parent);
         }
+
 
         self.size -= 1;
-        z.move_out()
-    }
-
-    fn delete_fixup(&mut self, z: &mut NodePtr<K, V>) {
-
+        
+        let closure = move || NodePtr::move_out(node);
+        closure()
     }
 
     /// Deletes a node from the tree and returns the key-value pair.
@@ -425,18 +426,85 @@ impl<K, V> RBTree<K, V> {
         }
     }
 
-    #[inline]
-    fn transplant(&mut self, u: &mut NodePtr<K, V>, v: &mut NodePtr<K, V>) {
-        if u.parent().is_null() {
-            self.root = u.clone();
-        } else if u.is_node_same(&u.parent().left()) {
-            u.parent().set_left(v);
-        } else {
-            u.parent().set_right(&v);
+    fn delete_fixup(&mut self, mut z: NodePtr<K, V>, mut p: NodePtr<K, V>) {
+        let mut x: NodePtr<K, V>;
+
+
+        while !self.is_root(&z) && z.color() == Color::Black {
+            if p.left().ptr_eq(&z) {
+                x = p.right();
+                // CASE 1: z's sibling x is red.
+                if x.color() == Color::Red {
+                    x.set_color(Color::Black);
+                    p.set_color(Color::Red);
+                    self.left_rotate(&mut p);
+                    x = p.right();
+                }
+
+                // z's sibling x is black and both of x's children are black.
+                if x.left().color() == Color::Black && x.right().color() == Color::Black {
+                    x.set_color(Color::Red);
+                    z = p;
+                    p = z.parent();
+                } else {
+                    // If z's sibling x is black and the left child of 
+                    // z is red and the right child is black.
+                    if x.right().color() == Color::Black {
+                        x.left().set_color(Color::Black);
+                        x.set_color(Color::Red);
+                        self.right_rotate(&mut x);
+                        x = p.right();
+                    }
+
+                    // z's brother x is black, z's right child is red and its left child is any color.
+                    x.set_color(p.color());
+                    p.set_color(Color::Black);
+                    x.right().set_color(Color::Black);
+                    self.left_rotate(&mut p);
+                    z = self.root;
+                    break;
+                }
+            } else {
+
+                x = p.left();
+                // CASE 1: z's sibling x is red.
+                if x.color() == Color::Red {
+                    x.set_color(Color::Black);
+                    p.set_color(Color::Red);
+                    self.right_rotate(&mut p);
+                    x = p.left();
+                }
+
+                // z's sibling x is black and both of x's children are black.
+                if x.left().color() == Color::Black && x.right().color() == Color::Black {
+                    x.set_color(Color::Red);
+                    z = p;
+                    p = z.parent();
+                } else {
+                    // If z's sibling x is black and the left child of 
+                    // z is red and the right child is black.
+                    if x.left().color() == Color::Black {
+                        x.right().set_color(Color::Black);
+                        x.set_color(Color::Red);
+                        self.left_rotate(&mut x);
+                        x = p.left();
+                    }
+
+                    // z's brother x is black, z's right child is red and its left child is any color.
+                    x.set_color(p.color());
+                    p.set_color(Color::Black);
+                    x.left().set_color(Color::Black);
+                    self.right_rotate(&mut p);
+                    z = self.root;
+                    break;
+                }
+
+            }
         }
 
-        v.set_parent(&u.parent());
+        z.set_color(Color::Black);
     }
+
 }
 
 impl<K: Ord, V> RBTree<K, V> {
@@ -682,58 +750,63 @@ mod tests {
         assert!(tree.root.is_null());
     }
 
-    // #[test]
-    // fn delete_leaf() {
-    //     let mut tree = RBTree::new();
+    #[test]
+    fn delete_leaf() {
+        let mut tree = RBTree::new();
 
-    //     tree.insert(14, 10);
-    //     tree.insert(15, 12);
+        tree.insert(14, 10);
+        tree.insert(15, 12);
 
-    //     let n = tree.find(15).unwrap();
-    //     tree.delete(n);
+        let n = tree.find(15).unwrap();
+        tree.delete(n);
 
-    //     // tree.show_tree();
+        tree.show_tree();
 
-    //     // assert_eq!(tree.root.key(), 14);
-    //     // assert_eq!(tree.size, 1);
-    //     // assert!(!tree.root.has_right());
-    // }
+        assert_eq!(tree.root.key(), 14);
+        assert_eq!(tree.size, 1);
+        assert!(!tree.root.has_right());
+    }
 
-    // #[test]
-    // fn delete_singlechild() {
-    //     let mut tree = RBTree::new();
+    #[test]
+    fn delete_singlechild() {
+        let mut tree = RBTree::new();
 
-    //     tree.insert(0, 4);
-    //     tree.insert(13, 4);
-    //     tree.insert(10, 4);
-    //     tree.insert(3, 4);
+        tree.insert(0, 4);
+        tree.insert(13, 4);
+        tree.insert(10, 4);
+        tree.insert(3, 4);
 
-    //     let r = tree.root;
+        /*
+            Tree:
+                10
+               /  \
+              0    13
+               \ 
+                3
+        */
 
-    //     let n_10 = tree.find(10).unwrap();
+        let _ = tree.remove(0);
 
-    //     tree.remove(n_10);
+        let r = tree.root;
 
-    //     let n_13 = tree.find(13).unwrap();
+        assert_eq!(r.key(), 10);
+        assert_eq!(r.left().key(), 3);
+        assert_eq!(r.right().key(), 13);
+    }
 
-    //     let n_13_ptr = n_13.nodeptr.clone();
+    #[test]
+    fn delete_two_children() {
+        let mut tree = RBTree::new();
 
-    //     assert_eq!(n_13_ptr.left().key(), 3);
+        tree.insert(0, 4);
+        tree.insert(-1, 2);
+        tree.insert(1, 4);
 
-    //     tree.remove(n_13);
+        let _ = tree.remove(0);
 
-    //     assert_eq!(r.right().key(), 3);
-    //     assert_eq!(tree.size, 2);
-    // }
-
-    // #[test]
-    // fn delete_two_children() {
-    //     let mut tree = RBTree::new();
-
-    //     tree.insert(0, 4);
-    //     tree.insert(-1, 2);
-    //     tree.insert(1, 4);
-    // }
+        assert_eq!(tree.root.key(), 1);
+        assert_eq!(tree.root.left().color(), Color::Red);
+    }
 
     #[test]
     fn swap_tree_elements() {

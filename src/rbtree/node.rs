@@ -226,6 +226,8 @@ impl<K, V> NodePtr<K, V> {
 
     pub fn successor(&self) -> Self {
         // if there is a right subtree
+        // then return the minimum from the right subtree (this could be
+        // the right node if there is no other node on that subtree.)
         if !self.right().is_null() {
             self.right().minimum()
         } else {
@@ -244,8 +246,8 @@ impl<K, V> NodePtr<K, V> {
     }
 
     // destroy the node and move the pointers out.
-    pub fn move_out(&mut self) -> (K, V) {
-        let b = unsafe {Box::from_raw(self.0)};
+    pub fn move_out(n: NodePtr<K, V>) -> (K, V) {
+        let b = unsafe {Box::from_raw(n.0)};
         b.move_out()
     }
 
@@ -318,7 +320,7 @@ impl<K, V> NodePtr<K, V> {
 
     /// Check if two node pointers are pointing to the same node.
     #[inline]
-    pub fn is_node_same(&self, other: &Self) -> bool {
+    pub fn ptr_eq(&self, other: &Self) -> bool {
         ptr::eq(self.0, other.0)
     }
 
